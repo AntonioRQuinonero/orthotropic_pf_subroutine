@@ -2,23 +2,23 @@
       implicit none
 	  integer nelem, numsdv, nipt
 	  parameter (nelem = 27500, numsdv=15, nipt=4)
-	  !nelem = número de elementos praa la subrutina UMAT
-	  !numsdv = número de variables de estado (parámetros para visualizar en Abaqus a través de SDV)
-	  !ninpt = número de puntos de integración del elemento
+	  !nelem = number of elements in an element layer
+	  !numsdv = number of variables to be stored in sdvout (currently 15)
+	  !ninpt = number of integration points in the element
 	  
-	  !sdvout(j,k,1) = E11 PF
-	  !sdvout(j,k,2) = E22 PF
-	  !sdvout(j,k,3) = E12 PF
-	  !sdvout(j,k,4) = E11 problema mecánico
-	  !sdvout(j,k,5) = E22 problema mecánico
-	  !sdvout(j,k,6) = E12 problema mecánico
-	  !sdvout(j,k,7) = phi1 PF
-	  !sdvout(j,k,8) = phi1 problema mecánico
-	  !sdvout(j,k,9) = phi2 PF
-	  !sdvout(j,k,10) = phi2 problema mecánico
-	  !sdvout(j,k,11) = placeholder por si se me ocurre algo más tarde
-	  !sdvout(j,k,12) = tiempo
-	  !sdvout(j,k,13) = iteración
+	  !sdvout(j,k,1) = Strain E11 in the PF element
+	  !sdvout(j,k,2) = Strain E22 in the PF element
+	  !sdvout(j,k,3) = Strain E12 in the PF element
+	  !sdvout(j,k,4) = Strain E11 in the mechanical element
+	  !sdvout(j,k,5) = Strain E22 in the mechanical element
+	  !sdvout(j,k,6) = Strain E12 in the mechanical element
+	  !sdvout(j,k,7) = PF variable phi1 in the PF element
+	  !sdvout(j,k,8) = PF variable phi1 in the mechanical element
+	  !sdvout(j,k,9) = PF variable phi2 in the PF element
+	  !sdvout(j,k,10) = PF variable phi2 in the mechanical element
+	  !sdvout(j,k,11) = empty
+	  !sdvout(j,k,12) = Time instant
+	  !sdvout(j,k,13) = Iteration number
 	  !sdvout(j,k,14) = Fracture energy damage mechanism 1
 	  !sdvout(j,k,15) = Fracture energy damage mechanism 2
 	  
@@ -27,10 +27,10 @@
 	  
       save
       end module    
-	 !Esta subrutina tiene irreversibilidad e imposición phi<1 mediante multiplicadores de lagrange y 4 DOF adicionales al PF
+
 
 ********************************************************************************
-C Subrutina para crear un elemento 2D de tensión plana con integración completa y esquema de resolución staggered
+C UEL subroutine for a 2D plane stress full integration hex element
 ********************************************************************************
       SUBROUTINE UEL(RHS,AMATRX,SVARS,ENERGY,NDOFEL,NRHS,NSVARS,
      1 PROPS,NPROPS,COORDS,MCRD,NNODE,U,DU,V,A,JTYPE,TIME,DTIME,
@@ -48,14 +48,12 @@ C Subrutina para crear un elemento 2D de tensión plana con integración complet
 	 	  
   
 	  parameter(gaussPoint=0.577350269189626d0,pi=3.14159265358979d0)
-C     Si se utilizan más o menos de 2 puntos de integración para elementos cuadrados
-C	  es necesario añadir también el valor de los pesos de la cuadratura
 
 	  parameter(nintp=4, nodeDOF=6, ndim=2, ntens=3)
-! 	  nintp = Número de puntos de integración
-!     nodeDOF = Grados de libertad en un nodo
-!	  ndim = Número de dimensiones geométricas del elemento
-!	  ntens = Número de ntens de la matriz B. ntens=3 en 2D y ntens=6 en 3D (en 2D puede variar para plane stress y plain strain)
+! 	  nintp = Number of integration points
+!         nodeDOF = Number of degrees of freedom at a node
+!	  ndim = Number of dimensions of the problem
+!	  ntens = Size of the stress and strain vectors (plane stress=3)
 
 	  dimension coordRef(4,2), dfunN(nnode,ndim), aInvMatJ(ndim,ndim), 
      1			Dmat(ntens,ntens),BmatPhi(ndim,nnode),
@@ -80,7 +78,7 @@ C	  es necesario añadir también el valor de los pesos de la cuadratura
 		enddo
 	  endif
 	  
-	  !Coordenadas nodos elemento de referencia
+	  !Reference element node coordinates
 	  coordRef(1,1) = -1.
 	  coordRef(1,2) = -1.
 	  coordRef(2,1) = 1.
@@ -90,7 +88,7 @@ C	  es necesario añadir también el valor de los pesos de la cuadratura
 	  coordRef(4,1) = 1.
 	  coordRef(4,2) = 1.
 
- 	  
+ 	  !Material properties
 	  E1 = props(1)
 	  E2 = props(2)
 	  xnu = props(3)
@@ -101,11 +99,11 @@ C	  es necesario añadir también el valor de los pesos de la cuadratura
 	  Gc2 = props(8)
 	  ang = props(9)*pi/180.d0
 
-	  EnergiaEl = 0.d0 !Inicializo a 0 la energía elástica
-	  FractureEnergy1 = 0.d0 !Inicializo a 0 la energía de fractura del mecanismo 1
-	  FractureEnergy2 = 0.d0 !Inicializo a 0 la energía de fractura del mecanismo 2
+	  EnergiaEl = 0.d0 !Strain energy initialization
+	  FractureEnergy1 = 0.d0 !Fracture energy 1 initialization
+	  FractureEnergy2 = 0.d0 !Fracture energy 2 initialization
 	  
-C Actualizo las variables temporales y de iteración
+          !Updating time and iteration variables
 
 	  timez = sdvout(jelem,1,12)
 	  if (timez .lt. time(2)) then
@@ -116,7 +114,7 @@ C Actualizo las variables temporales y de iteración
 	  endif
 	  stepiter = sdvout(jelem,1,13)
 	 
-	  !Inicialización de residuos y matriz tangente
+	  !Element residuals and sitffness matrix initialization
 	  do i = 1,nnode*nodeDof
 		do j = 1,nnode*nodeDof
 			AMATRX(i,j) = 0.d0
@@ -124,41 +122,40 @@ C Actualizo las variables temporales y de iteración
 		RHS(i,1) = 0.d0
 	  enddo
 	  
-	  !Inicio bucle para integración
+	  !Integration loop
 	  do kintp=1,nintp
 	  
-!************** Cálculo funciones de forma y derivadas respecto variables locales	  
-		!Creo un vector 
+!************** Shape functions and derivatives with respect local coordinates	  
+
 		xi = coordRef(kintp,1)*gaussPoint
 		eta = coordRef(kintp,2)*gaussPoint
 		
-		!Funciones de forma
+		!Shape functions
 		funN(3) = 0.25d0*(xi+1.)*(eta+1.)
 		funN(4) = 0.25d0*(1.-xi)*(eta+1.)
 		funN(2) = 0.25d0*(xi+1.)*(1.-eta)
 		funN(1) = 0.25d0*(xi-1.)*(eta-1.)
 		
-		!Derivada con respecto a xi de las funciones de forma
+		!Shape functions derivatives with respect to xi
 		dfunN(3,1) = 0.25d0*(eta+1.)
 		dfunN(4,1) = -0.25d0*(eta+1.)
 		dfunN(2,1) = 0.25d0*(1.-eta)
 		dfunN(1,1) = 0.25d0*(eta-1.)
 		
-		!Derivada con respecto a eta de las funciones de forma
+		!Shape functions derivatives with respect to eta
 		dfunN(3,2) = 0.25d0*(xi+1.)
 		dfunN(4,2) = 0.25d0*(1.-xi)
 		dfunN(2,2) = -0.25d0*(xi+1.)
 		dfunN(1,2) = 0.25d0*(xi-1.)
 		
 
-!************** Cálculo matriz Jacobiana, inversa, determinante y derivadas 
-!				funciones de forma respecto variables globales
+!************** Jacobian (and inverse) matrix, determinant and shape function derivatives with respect global coordinates
 		dxdxi = 0.d0
 		dxdeta = 0.d0
 		dydxi = 0.d0
 		dydeta = 0.d0
 	
-		! Se calculan las derivadas de las coordenadas x e y respecto a las varaibles locales
+		!Derivatives of the global coordiantes with respect local coordinates
 		do k=1,NNODE		
 			dxdxi = dxdxi + dfunN(k,1)*COORDS(1,k)
 			dxdeta = dxdeta + dfunN(k,2)*COORDS(1,k)
@@ -166,7 +163,7 @@ C Actualizo las variables temporales y de iteración
 			dydeta = dydeta + dfunN(k,2)*COORDS(2,k)		
 		enddo
 	
-		! Se monta la matriz jacobiana y se calcula el jacobiano. 
+		!Jacobian matrix and determinant
 		aMatJ(1,1) = dxdxi
 		aMatJ(1,2) = dydxi
 		aMatJ(2,1) = dxdeta
@@ -175,22 +172,21 @@ C Actualizo las variables temporales y de iteración
 		detMatJ = aMatJ(1,1)*aMatJ(2,2)-aMatJ(1,2)*aMatJ(2,1)
 		
 		
-		!Inversa de aMatJ para evaluar Bmat
-	
+		!Inverse Jacobian matrix
 		aInvMatJ(1,1) = aMatJ(2,2) / detMatJ
 		aInvMatJ(1,2) = - aMatJ(1,2) / detMatJ
 		aInvMatJ(2,1) = - aMatJ(2,1) / detMatJ
 		aInvMatJ(2,2) = aMatJ(1,1) / detMatJ
 	  
-!********************* B Matrix
+!********************* B Matrix (PF problem)
 
-		!Calculo las derivadas de las funciones de forma respecto a x e y (global coordinates)
+		!Shape functions derivatives with respect global coordinates
 		do k = 1, NNODE
 			dN(k,1) = aInvMatJ(1,1)*dfunN(k,1) + aInvMatJ(1,2)*dfunN(k,2)
 			dN(k,2) = aInvMatJ(2,1)*dfunN(k,1) + aInvMatJ(2,2)*dfunN(k,2)
 		enddo
 		
-		!Creación de la matriz B del problema Phase-Field y su traspuesta
+		!B matrix and transpose B
 		do i = 1,ndim
 			do j = 1,nnode
 				BmatPhi(i,j) = dN(j,i)
@@ -198,7 +194,7 @@ C Actualizo las variables temporales y de iteración
 			enddo
 		enddo
 
-!****************** Residuo phi
+!****************** Residual
 	
 	  !Se calcula phi y su gradiente a nivel punto de integración
 	  	phi1 = 0.d0
