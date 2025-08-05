@@ -196,7 +196,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 
 !****************** Residual
 	
-	  !Se calcula phi y su gradiente a nivel punto de integración
+	  !phi, phi increment and phi gradient at integration point
 	  	phi1 = 0.d0
 		dphi1 = 0.d0
 		gradphi1 = 0.d0
@@ -216,7 +216,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 		enddo
 	  enddo
 	  
-	  !Actualizo phi mec tal y como hace molnar
+	  !Updating phi for mechanical problem
 	  if (stepiter .eq. 0.d0) then
 		sdvout(jelem,kintp,7) = phi1-dphi1
 		sdvout(jelem,kintp,9) = phi2-dphi2
@@ -225,9 +225,8 @@ C UEL subroutine for a 2D plane stress full integration hex element
 		sdvout(jelem,kintp,9) = phi2
 	  endif
 	  
-	  !Se calculan funciones de degradación y geométricas. De momento, modelo AT2
-	  !Atento a la forma de definir la degradación!!!!!
-	  xk = 1.d-07 !Parámetro para rigidez residual en degradación completa
+	  !AT2 model degradation and geometric functions
+	  xk = 1.d-07 
 	  
 	  ! DEGRADATION FUNCTION
 
@@ -236,7 +235,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 
 	   
 	  !GEOMETRIC FUNCTION
-      alpha1 = phi1**2.d0
+      	  alpha1 = phi1**2.d0
 	  dalpha1 = 2.d0*phi1
 	  ddalpha1 = 2.d0
 	  cw1 = 2.d0
@@ -246,7 +245,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 	  ddalpha2 = 2.d0
 	  cw2 = 2.d0
 	  
-	  !Matrices constitutivas y derivadas
+	  !Constitutive matrices and derivatives
 	  do i=1,ntens
 		do j=1,ntens
 			Dmat(i,j) = 0.d0
@@ -255,21 +254,15 @@ C UEL subroutine for a 2D plane stress full integration hex element
 	  enddo
 	  
 	  b = 1.d0/(E1-E2*xnu**2.d0)
-	  !Matriz constitutiva sin daño
+	  !Pristine constitutive matrix
 	  Dmat0(1,1) = E1**2.d0*b
 	  Dmat0(1,2) = E1*E2*xnu*b
 	  Dmat0(2,2) = E1*E2*b
 	  Dmat0(2,1) = Dmat0(1,2)
 	  Dmat0(3,3) = G12
-!	  
-!	  !Matriz Constitutiva dañada
-!	  do i = 1,NTENS
-!		do j = 1,ntens
-!			Dmat(i,j) = g*Dmat0(i,j)
-!		enddo
-!	  enddo
+
 	    
-	  !Lectura de deformaciones del problema mecánico
+	  !Reading strains
 	  if (stepiter .eq. 0) then
 		stran(1) = sdvout(jelem,kintp,4)
 		stran(2) = sdvout(jelem,kintp,5)
@@ -280,7 +273,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 		stran(3) = sdvout(jelem,kintp,3)
 	  endif
 
-	  !Cáclulo de las derivadas de la matriz constituvia respecto variables PF
+	  !Derivatives of damaged constitutive matrix with respect PF variables
 	  Cphi1 = 0.d0
 	  Cphi1(1,1) = -2.d0*g1*Dmat0(1,1)
 	  Cphi1(1,2) = -g2*Dmat0(1,2)
@@ -293,23 +286,20 @@ C UEL subroutine for a 2D plane stress full integration hex element
 	  Cphi2(3,3) = -g1*Dmat0(3,3)
 	  Cphi2(2,1) = Cphi2(1,2)
 	  
-	  !Cálculo del tensor estructural en coordenadas globales
+	  !Structural tensor calculus in global coordinates
 	  
-	  !Tensor estructural 1
+	  !A_1
 	  StrTensor1(1,1) = sin(ang)**2.d0
 	  StrTensor1(1,2) = -cos(ang)*sin(ang)
 	  StrTensor1(2,1) = -cos(ang)*sin(ang)
 	  StrTensor1(2,2) = cos(ang)**2.d0
-	  !Tensor estructural 2
+	  !A_2
 	  StrTensor2(1,1) = cos(ang)**2.d0
 	  StrTensor2(1,2) = cos(ang)*sin(ang)
 	  StrTensor2(2,1) = cos(ang)*sin(ang)
 	  StrTensor2(2,2) = sin(ang)**2.d0
-	  
-	  !Vectores base globales
-	  
-	  !Cálculo del residuo
-	  !variable phi
+	  	  
+	  !Residual calculus
 	  
 	  flux1 = 0.d0
 	  flux2 = 0.d0
@@ -329,7 +319,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 		RHS(2+nodeDof*(i-1),1) = RHS(2+nodeDof*(i-1),1) - flux2(i)
 	  enddo
   	  
-	  !Aprovecho para calcular la energía de fractura
+	  !Fracture energy calculus at integration point (both damage mechanisms)
 	  gradMod1 = dot_product(gradphi1,matmul(StrTensor1,gradphi1))
 	  gradMod2 = dot_product(gradphi2,matmul(StrTensor2,gradphi2))
 	
@@ -352,7 +342,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 	  Cphi1phi2(2,1) = Dmat0(1,2)
 	  Cphi1phi2(3,3) = Dmat0(3,3)
 	  
-	  !Matriz auxiliar para todos los cálculos posteriores
+	  !Auxiliar matrix
 	  do i = 1,nnode
 		do j = 1,nnode
 			A3(i,j) = funN(i)*funN(j)
@@ -398,24 +388,19 @@ C UEL subroutine for a 2D plane stress full integration hex element
 		enddo
 	  enddo
 
-!************** Actualización de variables externas sdvout salida PF
+!************** Updating external variables
 
 	  sdvout(jelem,kintp,1) = stran(1)
 	  sdvout(jelem,kintp,2) = stran(2)
 	  sdvout(jelem,kintp,3) = stran(3)
 		
-	  
 	  enddo
 	  
- 	  ResEnergy = 0.d0 !Energía "absorbida" por las restricciones
-	  
-	  !IRREVERSIBILIDAD
-	   !Calculamos los residuos y Tanget stiffness matrix cuando salimos de las restricciones
+	  !IRREVERSIBILITY
 	  do k = 1,nnode
-	  
-		!Comprobamos condiciones en phi1 en cada nodo
+		!phi1
 		if (du(1+nodeDof*(k-1),1) .lt. 0.d0 .or. 
-     1	u(3+nodeDof*(k-1)) .gt. 0.d0) then
+     1		u(3+nodeDof*(k-1)) .gt. 0.d0) then
 			RHS(1+nodeDof*(k-1),1) = RHS(1+nodeDof*(k-1),1) +
      1								 u(3+nodeDof*(k-1))
 			RHS(3+nodeDof*(k-1),1) = RHS(3+nodeDof*(k-1),1) + 
@@ -426,7 +411,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 			AMATRX(3+nodeDof*(k-1),3+nodeDof*(k-1)) = 1.d0
 		endif
 		
-		!Comprobamos condiciones en phi2 en cada nodo
+		!phi2
 		if (du(2+nodeDof*(k-1),1) .lt. 0.d0 .or. 
      1	u(4+nodeDof*(k-1)) .gt. 0.d0) then
 			RHS(2+nodeDof*(k-1),1) = RHS(2+nodeDof*(k-1),1) + 
@@ -440,11 +425,11 @@ C UEL subroutine for a 2D plane stress full integration hex element
 		endif
 	  enddo
 	  
-	!LIMITACIÓN PHI<1
-		   !Calculamos los residuos y Tanget stiffness matrix cuando salimos de las restricciones
+	!CONSTRAINT PHI<1
+
 	  do k = 1,nnode
 	  
-		!Comprobamos condiciones en phi1 en cada nodo
+		!phi1
 		if (u(1+nodeDof*(k-1)) .gt. 0.9999d0 .or. 
      1	u(5+nodeDof*(k-1)) .gt. 0.d0) then
 			RHS(1+nodeDof*(k-1),1) = RHS(1+nodeDof*(k-1),1) -
@@ -456,7 +441,7 @@ C UEL subroutine for a 2D plane stress full integration hex element
 			AMATRX(5+nodeDof*(k-1),5+nodeDof*(k-1)) = 1.d0
 		endif
 		
-		!Comprobamos condiciones en phi2 en cada nodo
+		!phi2
 		if (u(2+nodeDof*(k-1)) .gt. 0.9999d0 .or. 
      1	u(6+nodeDof*(k-1)) .gt. 0.d0) then
 			RHS(2+nodeDof*(k-1),1) = RHS(2+nodeDof*(k-1),1) - 
@@ -470,13 +455,9 @@ C UEL subroutine for a 2D plane stress full integration hex element
 	  enddo
 	 
 	  
-	  !Guardo la energía de fractura debido a phi como Creep dissipation
+	  !Store fracture energy as Creep dissipation
 	  ENERGY(3) = FractureEnergy1 + FractureEnergy2
 	 
-	  ! print*, 'AMATRX'
-	  ! do i=1,24
-	  ! print("(24F6.2)"), AMATRx(i,1:24) 
-	  ! enddo
       RETURN
       END	  
 
@@ -505,7 +486,7 @@ C
 	  
       integer kelem
 	  
-	  !Inicializamos DDSDDE
+	  !Initializing DDSDDE
 	  do i = 1, ntens
 		do j = 1,ntens
 			ddsdde(i,j) = 0.d0
@@ -513,17 +494,15 @@ C
 		enddo
 	  enddo
 
-	  !Lectura propiedades mecánicas
+	  !Reading mechanical properties
 	  E1 = props(1)
 	  E2 = props(2)
 	  xnu = props(3)
 	  G12 = props(4)
 	  
-      kelem=int(noel-nelem) !Se asume siempre que los elementos a utilizar en UMAT
-	  !van numerados después de los elementos para la UEL
-	 
+      kelem=int(noel-nelem) !UMAT element are assumed to be defined after UEL elements in the inp file	 
 
-	  !Lectura de los valores de phi
+	  !Reading phi
 	  stepiter = sdvout(kelem,1,13)
 	  if (stepiter .eq. 0) then
 		phi1 = sdvout(kelem,npt,7)
@@ -535,10 +514,8 @@ C
 
 	  g1 = max(1.d0-phi1,1d-7)
 	  g2 = max(1.d0-phi2,1d-7)
-	  ! g1 = 1.d0-phi1
-	  ! g2 = 1.d0-phi2
 	  
-	  !Cálculo DDSDDE plane stress
+	  !Calculus DDSDDE plane stress
 	  a = 1.d0/(E1-E2*xnu**2.d0)
 
 	  c0(1,1) = E1**2.d0*a
@@ -554,19 +531,13 @@ C
 	  ddsdde(2,1) = ddsdde(1,2)
 
 
-	  !Actualizo stresses
+	  !Updating stresses
 	  stress = matmul(ddsdde,stran+dstran)
 		
-	  !Energía de deformación degradada
+	  !Strain energy
 	  sse = 0.5d0*dot_product(stress,stran+dstran)
-	  
-	  !Variable energía deformación
-	  ! H = 0.5d0*dot_product(matmul(c0,stran+dstran),stran+dstran)
-	  
-	  !Irreversibilidad
-	  ! H = max(H,sdvout(kelem,npt,10))
-	  
-	  !Actualizo las variables de comunicación
+
+	  !Updating external variables
 
 	  sdvout(kelem,npt,4) = stran(1) + dstran(1)
 	  sdvout(kelem,npt,5) = stran(2) + dstran(2)
@@ -584,3 +555,4 @@ C
 		
       RETURN
       END
+
