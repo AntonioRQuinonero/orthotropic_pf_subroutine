@@ -6,6 +6,7 @@ To configure the model, you can create a standard Abaqus .inp file following con
 
 First, the material must be defined as a User Material, and four parameters must be specified: E1, E2, nu12 and G12. In addition, the Depvar option must be included, specifying 12 state variables.
 ```inp
+*Material, name=MechMaterial
 *User Material, constants=4
 E1, E2, nu12, G12
 *Depvar
@@ -46,6 +47,18 @@ Create an element set for the phase-field (PF) element layer (to solve the damag
 The properties to be used with the user element in the subroutine must be assigned. There are 9 properties to define: E1, E2, nu12, G12, l01, Gc1, l02, Gc2, and theta. The angle theta corresponds to the angle formed by direction 1 with respect to the global X-axis and should be given in degrees.
 ```inp
 *UEL PROPERTY, ELSET=SetPF
-E1, E2, nu12, 5290.0, 0.02, 97.8, 0.02, 0.277
-90.
+E1, E2, nu12, G12, l01, Gc1, l02, Gc2
+theta
 ```
+
+Also, make sure to assign the User Material properties to the element set used for the mechanical problem, along with the material orientation theta.
+```inp
+*Orientation, name=Ori-1
+1., 0., 0., 0., 1., 0.
+3, theta
+** Section: Section-1
+*Solid Section, elset=SetMech, orientation=Ori-1, material=MechMaterial
+,
+```
+
+Finally, it is necessary to modify the value of the variable nelem in the module kvisual of the subroutine so that it matches the number of elements in one material layer, i.e., n.
